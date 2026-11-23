@@ -1,0 +1,277 @@
+<title>Subscription Churn Dashboard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: KPI strip on top, filters, then one full-width panel per question (chart left, written insight right). */
+:root{
+  --bg:#F5F6F8; --surface:#FFFFFF; --ink:#14181F; --ink2:#444D5A; --muted:#667080; --line:#E0E4EA;
+  --churn:#C2410C; --keep:#1D5FD1; --focus:#1D5FD1; --soft:#EEF1F5;
+  --display:'Space Grotesk',system-ui,sans-serif; --body:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1217; --surface:#161B22; --ink:#E8ECF1; --ink2:#B0B9C5; --muted:#8C96A4; --line:#2A313B;
+  --churn:#FB923C; --keep:#6EA2FF; --focus:#6EA2FF; --soft:#1D242D; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1217; --surface:#161B22; --ink:#E8ECF1; --ink2:#B0B9C5; --muted:#8C96A4; --line:#2A313B;
+  --churn:#FB923C; --keep:#6EA2FF; --focus:#6EA2FF; --soft:#1D242D; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.55;
+  padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(1.6rem,4vw,2.2rem);line-height:1.15}
+h2{font-size:1.05rem}
+.sub{color:var(--ink2);max-width:68ch;margin:8px 0 0}
+.eyebrow{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.defs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.defs dt{font-family:var(--display);font-weight:600;font-size:13px}
+.defs dd{margin:2px 0 0;color:var(--ink2);font-size:13px}
+.defs code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--soft);padding:1px 5px;border-radius:4px}
+.filters{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.filters label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink2);font-weight:500;min-width:0}
+select,button{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;min-height:36px}
+select{min-width:170px;max-width:100%}
+button{cursor:pointer;font-weight:500}
+button:hover{background:var(--soft)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.scope{margin-left:auto;color:var(--ink2);font-size:13px;align-self:center}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.kpi .v{font-family:var(--display);font-weight:700;font-size:2rem;line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums}
+.kpi .n{color:var(--muted);font-size:12px;margin-top:4px}
+.panel{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px}
+.panel .insight{border-left:1px solid var(--line);padding-left:20px;color:var(--ink2);font-size:13.5px;min-width:0}
+.panel .insight h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.panel .insight p{margin:0 0 8px}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--ink2);margin:6px 0 12px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:10px;border-radius:2px;display:inline-block}
+.sw.churn,.seg.churn{background-color:var(--churn);background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.55) 0 2px,transparent 2px 6px)}
+.sw.keep,.seg.keep{background:var(--keep)}
+.rows{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;grid-template-columns:clamp(5.5rem,22%,8rem) minmax(0,1fr) clamp(5rem,22%,7.5rem);gap:10px;align-items:center}
+.lab{font-weight:500;font-size:13px;min-width:0}
+.lab small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+.track{display:flex;gap:2px;height:20px;background:var(--soft);border-radius:4px;overflow:hidden}
+.seg{height:100%;min-width:0}
+.seg:first-child{border-radius:4px 0 0 4px}.seg:last-child{border-radius:0 4px 4px 0}.seg:only-child{border-radius:4px}
+.val{font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums;text-align:right}
+.val b{color:var(--ink);font-weight:600}
+.empty{color:var(--muted);padding:8px 0}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:640px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid currentColor}
+.pill.y{color:var(--churn)}.pill.n{color:var(--keep)}
+.note{color:var(--muted);font-size:12px}
+@media (max-width:760px){.panel{grid-template-columns:minmax(0,1fr)}.panel .insight{border-left:0;border-top:1px solid var(--line);padding:14px 0 0}.scope{margin-left:0;width:100%}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Customer analytics · 15-customer sample</div>
+    <h1>Subscription churn dashboard</h1>
+    <p class="sub">Who leaves, how quickly, and how much monthly revenue leaves with them. Use the filters to slice by contract, tenure and payment method; every number, chart and the table below updates together.</p>
+  </header>
+
+  <section class="card" aria-labelledby="defs-h">
+    <h2 id="defs-h" style="margin-bottom:12px">KPI definitions</h2>
+    <dl class="defs" style="margin:0">
+      <div><dt>Churn rate</dt><dd><code>churned customers ÷ all customers</code> in the current filter.</dd></div>
+      <div><dt>Retention rate</dt><dd><code>1 − churn rate</code>, the share of customers still subscribed.</dd></div>
+      <div><dt>Revenue at risk</dt><dd>Monthly recurring revenue (MRR) from churned customers: <code>Σ MonthlyCharges where Churn = Yes</code>. Shown with its share of total MRR and its annualised value (×12).</dd></div>
+      <div><dt>Tenure</dt><dd>Average <code>TenureMonths</code>, reported separately for churned and retained customers.</dd></div>
+    </dl>
+  </section>
+
+  <section class="card" aria-label="Filters">
+    <div class="filters">
+      <label for="f-contract">Contract
+        <select id="f-contract"></select></label>
+      <label for="f-tenure">Tenure
+        <select id="f-tenure"></select></label>
+      <label for="f-pay">Payment method
+        <select id="f-pay"></select></label>
+      <button id="reset" type="button">Reset filters</button>
+      <div class="scope" id="scope" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="kpis" aria-label="Key metrics" id="kpis"></section>
+
+  <section class="card panel">
+    <div>
+      <h2>Churn by contract type</h2>
+      <div class="legend"><span><i class="sw churn"></i>Churned</span><span><i class="sw keep"></i>Retained</span></div>
+      <div class="rows" id="c-contract"></div>
+    </div>
+    <div class="insight"><h3>Insight</h3>
+      <p><b>Contract type separates leavers from stayers completely.</b> All 7 month-to-month customers churned; none of the 8 customers on one-year or two-year contracts did.</p>
+      <p>Moving month-to-month customers onto a term contract is the largest retention lever in this sample.</p></div>
+  </section>
+
+  <section class="card panel">
+    <div>
+      <h2>Churn by tenure band</h2>
+      <div class="legend"><span><i class="sw churn"></i>Churned</span><span><i class="sw keep"></i>Retained</span></div>
+      <div class="rows" id="c-tenure"></div>
+    </div>
+    <div class="insight"><h3>Insight</h3>
+      <p><b>Risk is front-loaded.</b> Every customer in their first 12 months churned (6 of 6), and the longest-tenured churner left at month 14.</p>
+      <p>Nobody past 25 months left. An onboarding push in the first year is where retention effort pays off.</p></div>
+  </section>
+
+  <section class="card panel">
+    <div>
+      <h2>Churn by payment method</h2>
+      <div class="legend"><span><i class="sw churn"></i>Churned</span><span><i class="sw keep"></i>Retained</span></div>
+      <div class="rows" id="c-pay"></div>
+    </div>
+    <div class="insight"><h3>Insight</h3>
+      <p><b>Bank transfer customers all stayed (3 of 3); UPI and debit card customers mostly left</b> (3 of 4 and 2 of 2).</p>
+      <p>Payment method overlaps with contract type here: all UPI and debit churners were month-to-month, so treat this as a signal to investigate, not a cause.</p></div>
+  </section>
+
+  <section class="card panel">
+    <div>
+      <h2>Churn by subscription plan</h2>
+      <div class="legend"><span><i class="sw churn"></i>Churned</span><span><i class="sw keep"></i>Retained</span></div>
+      <div class="rows" id="c-plan"></div>
+    </div>
+    <div class="insight"><h3>Insight</h3>
+      <p><b>Churn is concentrated in the cheapest plan.</b> Basic lost 5 of 7 customers, Pro 2 of 4, and Enterprise none.</p>
+      <p>This is why churners are 47% of customers but only 32% of monthly revenue.</p></div>
+  </section>
+
+  <section class="card panel">
+    <div>
+      <h2>Monthly revenue at risk by plan</h2>
+      <div class="legend"><span><i class="sw churn"></i>MRR lost to churn</span><span><i class="sw keep"></i>MRR retained</span></div>
+      <div class="rows" id="c-rev"></div>
+    </div>
+    <div class="insight"><h3>Insight</h3>
+      <p><b>$409.93 of $1,269.85 monthly revenue (32.3%) has churned</b>, about $4,919 a year.</p>
+      <p>Five Basic churners account for $249.95 of that and two Pro churners for $159.98. A lost Pro account is worth 1.6× a lost Basic one, so Pro churn deserves attention despite the smaller count.</p></div>
+  </section>
+
+  <section class="card panel">
+    <div>
+      <h2>Support tickets: churned vs retained</h2>
+      <div class="legend"><span><i class="sw churn"></i>Churned</span><span><i class="sw keep"></i>Retained</span></div>
+      <div class="rows" id="c-tix"></div>
+    </div>
+    <div class="insight"><h3>Insight</h3>
+      <p><b>Churned customers raised about four times as many tickets.</b> They averaged 4.3 tickets, retained customers 1.0.</p>
+      <p>Three or more tickets is a practical early-warning flag for a proactive outreach list.</p></div>
+  </section>
+
+  <section class="card" aria-labelledby="tbl-h">
+    <h2 id="tbl-h" style="margin-bottom:10px">Customers in view</h2>
+    <div class="tablewrap"><table id="tbl"><thead><tr>
+      <th>Customer</th><th>Contract</th><th>Tenure (mo)</th><th>Plan</th><th>Monthly ($)</th><th>Tickets</th><th>Payment</th><th>Churn</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <p class="note">Source: customer_churn_sample.csv (15 customers). With a sample this small, a single customer moves a rate by about 7 points, so read patterns as directions to test on the full customer base. Written insights describe the full sample; the KPIs, charts and table follow your filters.</p>
+</div>
+
+<script>
+const DATA=[
+["CUST-1001","Female",34,12,"Basic",49.99,599.88,"Month-to-Month",3,"Credit Card","Yes"],
+["CUST-1002","Male",45,24,"Pro",79.99,1919.76,"One Year",1,"Bank Transfer","No"],
+["CUST-1003","Female",29,6,"Basic",49.99,299.94,"Month-to-Month",5,"UPI","Yes"],
+["CUST-1004","Male",52,36,"Enterprise",149.99,5399.64,"Two Year",0,"Credit Card","No"],
+["CUST-1005","Female",41,8,"Pro",79.99,639.92,"Month-to-Month",4,"Debit Card","Yes"],
+["CUST-1006","Male",31,18,"Basic",49.99,899.82,"One Year",2,"UPI","No"],
+["CUST-1007","Female",23,3,"Basic",49.99,149.97,"Month-to-Month",6,"Credit Card","Yes"],
+["CUST-1008","Male",60,48,"Enterprise",149.99,7199.52,"Two Year",1,"Bank Transfer","No"],
+["CUST-1009","Female",38,15,"Pro",79.99,1199.85,"One Year",2,"Credit Card","No"],
+["CUST-1010","Male",27,4,"Basic",49.99,199.96,"Month-to-Month",4,"UPI","Yes"],
+["CUST-1011","Female",49,30,"Enterprise",149.99,4499.70,"Two Year",0,"Credit Card","No"],
+["CUST-1012","Male",33,14,"Pro",79.99,1119.86,"Month-to-Month",3,"Debit Card","Yes"],
+["CUST-1013","Female",55,22,"Basic",49.99,1099.78,"One Year",1,"Bank Transfer","No"],
+["CUST-1014","Male",26,2,"Basic",49.99,99.98,"Month-to-Month",5,"UPI","Yes"],
+["CUST-1015","Female",43,40,"Enterprise",149.99,5999.60,"Two Year",1,"Credit Card","No"]
+].map(r=>({id:r[0],gender:r[1],age:r[2],tenure:r[3],plan:r[4],mrr:r[5],total:r[6],contract:r[7],tix:r[8],pay:r[9],churn:r[10]==="Yes"}));
+
+const BANDS=[["0–6 months",0,6],["7–12 months",7,12],["13–24 months",13,24],["25+ months",25,1e9]];
+const bandOf=t=>BANDS.find(b=>t>=b[1]&&t<=b[2])[0];
+const uniq=k=>[...new Set(DATA.map(d=>d[k]))];
+const CONTRACTS=["Month-to-Month","One Year","Two Year"];
+const PLANS=["Basic","Pro","Enterprise"];
+const PAYS=uniq("pay").sort();
+const $=id=>document.getElementById(id);
+const money=n=>"$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct=n=>(n*100).toFixed(1).replace(/\.0$/,"")+"%";
+const avg=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
+
+function fill(id,all,opts){ $(id).innerHTML=[`<option value="">${all}</option>`].concat(opts.map(o=>`<option>${o}</option>`)).join(""); }
+fill("f-contract","All contracts",CONTRACTS);
+fill("f-tenure","All tenures",BANDS.map(b=>b[0]));
+fill("f-pay","All payment methods",PAYS);
+
+function current(){
+  const c=$("f-contract").value,t=$("f-tenure").value,p=$("f-pay").value;
+  return DATA.filter(d=>(!c||d.contract===c)&&(!t||bandOf(d.tenure)===t)&&(!p||d.pay===p));
+}
+
+function stack(el,groups,keyFn,rows){
+  const out=groups.map(g=>{
+    const m=rows.filter(r=>keyFn(r)===g), n=m.length, c=m.filter(r=>r.churn).length, k=n-c;
+    const lab=`<div class="lab">${g}<small>${n} customer${n===1?"":"s"}</small></div>`;
+    if(!n) return `<div class="row">${lab}<div class="track" aria-hidden="true"></div><div class="val">no data</div></div>`;
+    const segs=(c?`<div class="seg churn" style="width:${c/n*100}%"></div>`:"")+(k?`<div class="seg keep" style="width:${k/n*100}%"></div>`:"");
+    return `<div class="row">${lab}<div class="track" role="img" aria-label="${g}: ${c} of ${n} churned">${segs}</div><div class="val"><b>${pct(c/n)}</b> · ${c} of ${n}</div></div>`;
+  });
+  $(el).innerHTML=out.join("");
+}
+
+function kpiHtml(label,value,note){return `<div class="kpi"><div class="eyebrow">${label}</div><div class="v">${value}</div><div class="n">${note}</div></div>`;}
+
+function render(){
+  const rows=current(), n=rows.length, ch=rows.filter(r=>r.churn), ke=rows.filter(r=>!r.churn);
+  const mrrAll=rows.reduce((s,r)=>s+r.mrr,0), mrrLost=ch.reduce((s,r)=>s+r.mrr,0);
+  $("scope").textContent=`Showing ${n} of ${DATA.length} customers`;
+  if(!n){
+    $("kpis").innerHTML=["Churn rate","Retention rate","Revenue at risk","Avg tenure"].map(l=>kpiHtml(l,"–","No customers match these filters")).join("");
+  } else {
+    const tc=avg(ch.map(r=>r.tenure)), tk=avg(ke.map(r=>r.tenure)), ta=avg(rows.map(r=>r.tenure));
+    const f=x=>x===null?"–":x.toFixed(1);
+    $("kpis").innerHTML=
+      kpiHtml("Churn rate",pct(ch.length/n),`${ch.length} of ${n} customers churned`)+
+      kpiHtml("Retention rate",pct(ke.length/n),`${ke.length} of ${n} customers retained`)+
+      kpiHtml("Revenue at risk",money(mrrLost),`${pct(mrrAll?mrrLost/mrrAll:0)} of ${money(mrrAll)} MRR · ${money(mrrLost*12)} a year`)+
+      kpiHtml("Avg tenure",f(ta)+" mo",`Churned ${f(tc)} mo · Retained ${f(tk)} mo`);
+  }
+  stack("c-contract",CONTRACTS,r=>r.contract,rows);
+  stack("c-tenure",BANDS.map(b=>b[0]),r=>bandOf(r.tenure),rows);
+  stack("c-pay",PAYS,r=>r.pay,rows);
+  stack("c-plan",PLANS,r=>r.plan,rows);
+
+  // Revenue by plan: bar length is dollars, on a fixed scale so bars keep their size when filters change.
+  const MAXG=600;
+  $("c-rev").innerHTML=PLANS.map(p=>{
+    const m=rows.filter(r=>r.plan===p), lost=m.filter(r=>r.churn).reduce((s,r)=>s+r.mrr,0), kept=m.filter(r=>!r.churn).reduce((s,r)=>s+r.mrr,0);
+    const lab=`<div class="lab">${p}<small>${money(lost+kept)} MRR</small></div>`;
+    if(!m.length) return `<div class="row">${lab}<div class="track" aria-hidden="true"></div><div class="val">no data</div></div>`;
+    const w=lost+kept, segs=(lost?`<div class="seg churn" style="width:${lost/w*100}%"></div>`:"")+(kept?`<div class="seg keep" style="width:${kept/w*100}%"></div>`:"");
+    return `<div class="row">${lab}<div style="width:${w/MAXG*100}%;min-width:6px"><div class="track" role="img" aria-label="${p}: ${money(lost)} lost, ${money(kept)} retained">${segs}</div></div><div class="val"><b>${money(lost)}</b> lost</div></div>`;
+  }).join("");
+
+  const tc=ch.map(r=>r.tix), tk=ke.map(r=>r.tix);
+  const tixRow=(name,arr,cls)=>{
+    const lab=`<div class="lab">${name}<small>${arr.length} customer${arr.length===1?"":"s"}</small></div>`;
+    if(!arr.length) return `<div class="row">${lab}<div class="track" aria-hidden="true"></div><div class="val">no data</div></div>`;
+    const a=avg(arr);
+    return `<div class="row">${lab}<div style="width:${Math.max(a/6*100,1.5)}%"><div class="track" role="img" aria-label="${name}: ${a.toFixed(1)} tickets on average"><div class="seg ${cls}"></div></div></div><div class="val"><b>${a.toFixed(1)}</b> avg tickets</div></div>`;
+  };
+  $("c-tix").innerHTML=tixRow("Churned",tc,"churn")+tixRow("Retained",tk,"keep");
+
+  $("tbl").tBodies[0].innerHTML=rows.length?rows.map(r=>`<tr><td>${r.id}</td><td>${r.contract}</td><td>${r.tenure}</td><td>${r.plan}</td><td>${r.mrr.toFixed(2)}</td><td>${r.tix}</td><td>${r.pay}</td><td><span class="pill ${r.churn?"y":"n"}">${r.churn?"Churned":"Retained"}</span></td></tr>`).join(""):`<tr><td colspan="8" class="empty">No customers match these filters. Reset the filters to see all 15.</td></tr>`;
+}
+
+["f-contract","f-tenure","f-pay"].forEach(id=>$(id).addEventListener("change",render));
+$("reset").addEventListener("click",()=>{["f-contract","f-tenure","f-pay"].forEach(id=>$(id).value="");render();});
+render();
+</script>
